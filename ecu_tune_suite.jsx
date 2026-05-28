@@ -134,6 +134,71 @@ const MAP_DB = {
         xLen:13,yLen:1,vBytes:2,patch:'zero',patchAll:true },
     ],
   },
+
+  // ── EDC17CP41 — BMW N57D30OL Bi-Turbo (535d/640d/X5 40d/740d F-series) ──────
+  // All signatures marked pending — drop a stock binary and verify hits before flashing
+  EDC17CP41: {
+    color:'#22C55E', vehicle:'BMW N57D30OL · Bi-Turbo · 313hp', label:'EDC17CP41',
+    EGR: [
+      { id:'CP41_EGR_MAIN', name:'EGR Main Demand', system:'EGR', pending:true,
+        note:'Pending — load a stock CP41 binary to locate signature',
+        sig:[], xLen:16,yLen:16,vBytes:1,patch:'zero',patchAll:true },
+      { id:'CP41_EGR_ENABLE', name:'EGR Enable Thresholds', system:'EGR', pending:true,
+        note:'Pending — temp axis -120°C to +80°C, same structure as CP45',
+        sig:[], xLen:11,yLen:1,vBytes:2,patch:'zero',patchAll:true },
+      { id:'CP41_EGR_VALVE_MON', name:'EGR Valve Monitor Tolerance', system:'EGR', pending:true,
+        note:'Pending — max patch prevents position faults',
+        sig:[], xLen:1,yLen:5,vBytes:1,patch:'max',dataOffset:8 },
+      { id:'CP41_EGR_CORR', name:'EGR Correction Factor', system:'EGR', pending:true,
+        note:'Pending — closed-loop correction map',
+        sig:[], xLen:16,yLen:16,vBytes:1,patch:'zero',patchAll:true,dataOffset:32 },
+    ],
+    DPF: [
+      { id:'CP41_DPF_PRESSURE_MODEL', name:'DPF Pressure Model (27-stage)', system:'DPF', pending:true,
+        note:'Pending — 13KB block, same pressure model structure as CP45',
+        sig:[], xLen:9,yLen:121,vBytes:2,patch:'zero',blockSize:13312,blockOffset:-226 },
+      { id:'CP41_DPF_SOOT_RATE', name:'DPF Soot Accumulation Rate', system:'DPF', pending:true,
+        note:'Pending — 8×8 uint8 soot rate map',
+        sig:[], xLen:8,yLen:8,vBytes:1,patch:'zero' },
+      { id:'CP41_DPF_WARN', name:'DPF Warning Thresholds', system:'DPF', pending:true,
+        note:'Pending — 7 threshold tables, max patch',
+        sig:[], xLen:12,yLen:1,vBytes:2,patch:'max',patchAll:true },
+    ],
+    ADBLUE: [
+      { id:'CP41_SCR_DOSE', name:'AdBlue Dosing Request', system:'ADBLUE', pending:true,
+        note:'Pending — zero = pump never commanded',
+        sig:[], xLen:8,yLen:8,vBytes:2,patch:'zero' },
+      { id:'CP41_SCR_EFF', name:'SCR Catalyst Efficiency Monitor', system:'ADBLUE', pending:true,
+        note:'Pending — zero = no efficiency check triggers fault',
+        sig:[], xLen:8,yLen:8,vBytes:2,patch:'zero' },
+      { id:'CP41_ADBLUE_LVL', name:'AdBlue Level Thresholds', system:'ADBLUE', pending:true,
+        note:'Pending — ECU never sees low level event',
+        sig:[], xLen:5,yLen:1,vBytes:2,patch:'zero' },
+      { id:'CP41_NOX_SET', name:'NOx Setpoint Map', system:'ADBLUE', pending:true,
+        note:'Pending — zero NOx setpoints',
+        sig:[], xLen:8,yLen:8,vBytes:2,patch:'zero' },
+      { id:'CP41_NOX_UP_MODEL', name:'NOx Upstream Model', system:'ADBLUE', pending:true,
+        note:'Pending — zero upstream model',
+        sig:[], xLen:7,yLen:1,vBytes:2,patch:'zero' },
+      { id:'CP41_NOX_FAULT_THR', name:'NOx Fault Threshold', system:'ADBLUE', pending:true,
+        note:'Pending — max = fault never triggers',
+        sig:[], xLen:4,yLen:1,vBytes:2,patch:'max' },
+      { id:'CP41_NOX_WARMUP', name:'NOx Warmup Delay', system:'ADBLUE', pending:true,
+        note:'Pending — max delay = monitoring never starts',
+        sig:[], xLen:4,yLen:1,vBytes:2,patch:'max' },
+    ],
+    SWIRL: [
+      { id:'CP41_SWIRL_DUTY', name:'Swirl Duty Map 1 (High Load)', system:'SWIRL', pending:true,
+        note:'Pending — Q0.12 duty, zero = flaps always open',
+        sig:[], xLen:8,yLen:7,vBytes:2,patch:'zero',dataOffset:32 },
+      { id:'CP41_SWIRL_DUTY2', name:'Swirl Duty Map 2 (Low Load)', system:'SWIRL', pending:true,
+        note:'Pending — low load duty range',
+        sig:[], xLen:8,yLen:7,vBytes:2,patch:'zero',dataOffset:32 },
+      { id:'CP41_SWIRL_ENABLE', name:'Swirl Enable Conditions', system:'SWIRL', pending:true,
+        note:'Pending — temp axis, zero = never enabled',
+        sig:[], xLen:13,yLen:1,vBytes:2,patch:'zero',patchAll:true },
+    ],
+  },
 };
 
 // ── Map viewer database (28 confirmed maps) ────────────────────
@@ -248,6 +313,7 @@ const COUNTER_DB = [
 
 
 function findAll(buf, sig) {
+  if (!sig || !sig.length) return [];
   const data = new Uint8Array(buf), hits = [];
   outer: for (let i = 0; i <= data.length - sig.length; i++) {
     for (let j = 0; j < sig.length; j++) if (data[i+j] !== sig[j]) continue outer;
@@ -461,6 +527,7 @@ export default function ECUTuneSuite() {
   const [sigConf,setSigConf]=useState({});           // id → 'found'|'approx'|'fallback'
   const [tipsSection,setTipsSection]=useState('delete');
   const [openTip,setOpenTip]=useState(null);
+  const [selectedEcu,setSelectedEcu]=useState('EDC17CP45');
   // Lambda tool state
   const [ltBoost,setLtBoost]=useState(1800);   // mbar absolute
   const [ltIQ,setLtIQ]=useState(65);           // mg/stroke
@@ -501,12 +568,16 @@ export default function ECUTuneSuite() {
     entries.push({ type:'header', text:`File: ${file?.name} (${(buf.byteLength/1024/1024).toFixed(2)} MB)` });
     entries.push({ type:'divider' });
 
-    const allMapsLocal = Object.values(MAP_DB.EDC17CP45).flat();
+    const ecuDef = MAP_DB[selectedEcu] || MAP_DB.EDC17CP45;
     const sysColors = { EGR:C.amber, DPF:C.red, ADBLUE:C.blue, SWIRL:C.purple };
 
-    for(const [sys, maps] of Object.entries(MAP_DB.EDC17CP45)){
+    for(const [sys, maps] of Object.entries(ecuDef)){
       entries.push({ type:'sys', text:`── ${SYS[sys]?.label?.toUpperCase()} ──`, col:sysColors[sys] });
       for(const m of maps){
+        if(m.pending) {
+          entries.push({ type:'skip', text:`  PENDING  ${m.name} — signature not yet verified`, col:C.amber });
+          continue;
+        }
         if(!enabled[m.id]) {
           entries.push({ type:'skip', text:`  SKIP  ${m.name}`, col:C.textFaint });
           continue;
@@ -601,28 +672,27 @@ export default function ECUTuneSuite() {
     return res;
   };
 
-  // Run all signature scans ONCE when buf loads — never during render
+  // Run all signature scans when buf or ECU selection changes
   useEffect(()=>{
     if(!buf) return;
-    // Enable all maps
+    const ecuMaps = Object.values(MAP_DB[selectedEcu] || MAP_DB.EDC17CP45).flat();
+    // Enable non-pending maps
     const en={};
-    Object.values(MAP_DB.EDC17CP45).flat().forEach(m=>{ en[m.id]=true; });
+    ecuMaps.forEach(m=>{ if(!m.pending) en[m.id]=true; });
     setEnabled(en);
     setVersions(findVersionStr(buf));
     setScanned(scanMaps(buf));
-    // Detect already-deleted systems
     setDeleteStatus(detectDeletes(buf));
-    // Scan signatures — expensive, do it once here not on every render
+    // Scan signatures for non-pending maps only
     const res={};
-    Object.values(MAP_DB.EDC17CP45).flat().forEach(m=>{
-      res[m.id]=findAll(buf,new Uint8Array(m.sig)).length;
+    ecuMaps.forEach(m=>{
+      res[m.id] = m.pending ? 0 : findAll(buf,new Uint8Array(m.sig)).length;
     });
-    // Also pre-scan counter signatures
     COUNTER_DB.forEach(ctr=>{
       res[ctr.id]=findAll(buf,new Uint8Array(ctr.sig)).length;
     });
     setScanRes(res);
-  },[buf]);
+  },[buf, selectedEcu]);
 
   // 3D canvas render
   const selDef = MAPS_DB.find(m=>m.id===selMap);
@@ -673,6 +743,12 @@ export default function ECUTuneSuite() {
       } else {
         setFile(f); setBuf(ab); setPatched(null); setMapEdits({});
         setAutoChg(null); setScanRes({}); setTab('delete');
+        // Auto-detect ECU from version strings
+        const vStr = findVersionStr(ab);
+        const ecuKey = vStr.some(v=>/CP41/i.test(v.text)) ? 'EDC17CP41'
+                     : vStr.some(v=>/CP45/i.test(v.text)) ? 'EDC17CP45'
+                     : 'EDC17CP45'; // default to CP45
+        setSelectedEcu(ecuKey);
         // Run signature-based map finder
         const {offsets, confidence} = findMapsInBinary(ab);
         setSigOffsets(offsets); setSigConf(confidence);
@@ -852,6 +928,7 @@ export default function ECUTuneSuite() {
     setScanResults(null); setScanView('db'); setScanSelMap(null);
     setScanProgress(0); setScanning(false); setScanCat('All');
     setTipsSection('delete'); setOpenTip(null);
+    setSelectedEcu('EDC17CP45');
   };
 
   // ── UI ───────────────────────────────────────────────────────
@@ -1026,6 +1103,28 @@ export default function ECUTuneSuite() {
           {/* ─── DELETE TAB ─── */}
           {!noFile&&tab==='delete'&&(
             <div style={{flex:1,overflow:'auto',padding:'20px'}}>
+              {/* ECU selector */}
+              <div style={{marginBottom:'10px',display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
+                <span style={{fontSize:'10px',fontWeight:700,color:C.textFaint,letterSpacing:'.08em',textTransform:'uppercase',marginRight:'2px'}}>ECU:</span>
+                {Object.entries(MAP_DB).map(([key,ecu])=>{
+                  const active=selectedEcu===key;
+                  const allPending=Object.values(ecu).flat().every(m=>m.pending);
+                  return (
+                    <button key={key} onClick={()=>setSelectedEcu(key)}
+                      style={{padding:'5px 12px',fontSize:'11px',fontWeight:700,borderRadius:'5px',cursor:'pointer',
+                        border:`1px solid ${active?ecu.color+'88':C.border}`,
+                        background:active?ecu.color+'22':C.surface2,
+                        color:active?ecu.color:C.textMid,transition:'all .15s',
+                        display:'flex',alignItems:'center',gap:'6px'}}>
+                      <span style={{width:'7px',height:'7px',borderRadius:'50%',background:active?ecu.color:C.border,display:'inline-block',flexShrink:0}}/>
+                      {key}
+                      {allPending&&<span style={{fontSize:'8px',fontWeight:700,color:C.amber,background:C.amber+'22',border:`1px solid ${C.amber}44`,borderRadius:'3px',padding:'1px 4px'}}>PENDING</span>}
+                    </button>
+                  );
+                })}
+                <span style={{fontSize:'10px',color:C.textFaint,marginLeft:'4px'}}>{(MAP_DB[selectedEcu]||MAP_DB.EDC17CP45).vehicle}</span>
+              </div>
+
               {/* File status summary banner */}
               {Object.keys(deleteStatus).length>0&&(
                 <div style={{marginBottom:'12px',padding:'10px 14px',background:C.surface,border:`1px solid ${C.border}`,borderRadius:'8px',display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
@@ -1049,7 +1148,7 @@ export default function ECUTuneSuite() {
               <div style={{display:'flex',gap:'6px',marginBottom:'16px',flexWrap:'wrap'}}>
                 {Object.entries(SYS).map(([key,s])=>{
                   const sysActive=delSys===key;
-                  const maps=MAP_DB.EDC17CP45[key]||[];
+                  const maps=(MAP_DB[selectedEcu]||MAP_DB.EDC17CP45)[key]||[];
                   const found=maps.filter(m=>(scanRes[m.id]||0)>0).length;
                   const delStat=deleteStatus[key];
                   const statCol=delStat==='DELETED'?C.green:delStat==='PARTIAL'?C.amber:null;
@@ -1309,10 +1408,27 @@ export default function ECUTuneSuite() {
                   <div style={{fontSize:'11px',fontWeight:700,color:C.textFaint,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'10px'}}>
                     Calibration Maps — {delSys}
                   </div>
-                  {(MAP_DB.EDC17CP45[delSys]||[]).map(m=>{
+                  {((MAP_DB[selectedEcu]||MAP_DB.EDC17CP45)[delSys]||[]).map(m=>{
                     const hits=scanRes[m.id]||0;
                     const found=hits>0;
                     const sys=SYS[delSys];
+                    if(m.pending) return (
+                      <div key={m.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 10px',
+                        borderRadius:'6px',marginBottom:'4px',background:C.amberDim+'11',
+                        border:`1px solid ${C.amber}33`,opacity:0.7}}>
+                        <div style={{width:'18px',height:'18px',border:`2px solid ${C.amber}66`,borderRadius:'4px',
+                          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'transparent'}}>
+                          <span style={{color:C.amber,fontSize:'10px',fontWeight:900}}>?</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'11px',fontWeight:600,color:C.textMid}}>{m.name}</div>
+                          <div style={{fontSize:'9px',color:C.textFaint,marginTop:'1px'}}>{m.note}</div>
+                        </div>
+                        <div className="badge" style={{background:C.amber+'22',color:C.amber,border:`1px solid ${C.amber}44`}}>
+                          PENDING
+                        </div>
+                      </div>
+                    );
                     return (
                       <div key={m.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 10px',
                         borderRadius:'6px',marginBottom:'4px',background:enabled[m.id]&&found?sys.bg+'44':C.surface2,
