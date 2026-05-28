@@ -848,8 +848,6 @@ export default function ECUTuneSuite() {
     setPct(0); setAutoChg(null);
     setLoading(false); setDownloadUrl(null);
     setLog([]); setShowLog(false);
-    setMapSearch(''); setViewType('table');
-    setMapPct(0); setAutoChanges(null);
     setCounterEnabled({'DIST_CTR':true,'CYCLE_CTR':true});
     setScanResults(null); setScanView('db'); setScanSelMap(null);
     setScanProgress(0); setScanning(false); setScanCat('All');
@@ -873,7 +871,7 @@ export default function ECUTuneSuite() {
     if(iq<=0) return 99;
     const rho=boost_mbar*100/(R_AIR*T_INTAKE);
     const mAir=rho*(VD_CC*1e-6)*ETA_V;
-    return mAir/(iq*1e-6*AFR_STOICH*1000);
+    return mAir/(iq*1e-6*AFR_STOICH);
   };
   const calcEGT=(iq,boost_mbar)=>{
     if(iq<=0) return 200;
@@ -994,9 +992,6 @@ export default function ECUTuneSuite() {
           {noFile&&(
             <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px'}}>
               <div style={{maxWidth:'440px',width:'100%',textAlign:'center'}}>
-                <div style={{fontSize:'40px',marginBottom:'16px'}}>⚙️</div>
-                <div style={{fontSize:'20px',fontWeight:700,marginBottom:'8px'}}>ECU Tune Suite</div>
-                <div style={{fontSize:'13px',color:C.textMid,marginBottom:'28px',lineHeight:1.7}}>Professional BMW diesel ECU calibration.<br/>EGR · DPF · AdBlue · Swirl delete + Stage tuning.</div>
                 {loading?(
                   <div style={{textAlign:'center',padding:'60px',color:C.textMid}}>
                     <div style={{fontSize:'24px',marginBottom:'12px'}}>⏳</div>
