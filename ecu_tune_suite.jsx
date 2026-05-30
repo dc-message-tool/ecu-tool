@@ -656,7 +656,7 @@ export default function ECUTuneSuite() {
   };
 
   // Detect which systems are already deleted in a binary ──────────
-  const detectDeletes = (b) => {
+  const detectDeletes = (b, ecuKey='EDC17CP45') => {
     if (!b) return {};
     const dv = new DataView(b);
     const rd1=(o,n)=>Array.from({length:n},(_,i)=>{const p=o+i;return p<b.byteLength?dv.getUint8(p):0;});
@@ -674,7 +674,11 @@ export default function ECUTuneSuite() {
         [new Uint8Array([0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01,0x58,0x02,0xBC,0x02]),12,64,2,'zero',50],
         [new Uint8Array([0x64,0x00,0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01]),10,64,2,'zero',50],
       ],
-      SWIRL:[
+      // CP41 swirl: use SWIRL_ENABLE temp axis (20-140°C) — non-zero in stock, zero after delete
+      // CP45 swirl: use duty map sigs — zero data means deleted
+      SWIRL: ecuKey==='EDC17CP41' ? [
+        [new Uint8Array([0x14,0x00,0x1E,0x00,0x32,0x00,0x46,0x00,0x5A,0x00,0x6E,0x00,0x82,0x00,0x8C,0x00]),0,16,2,'zero',10],
+      ] : [
         [new Uint8Array([0xAC,0x0D,0xA0,0x0F,0x94,0x11,0x88,0x13,0x7C,0x15,0x70,0x17,0x58,0x1B,0x00,0x00,0x58,0x02,0x20,0x03,0xE8,0x03,0xDC,0x05]),32,56,2,'zero',500],
         [new Uint8Array([0xC4,0x09,0xB8,0x0B,0xAC,0x0D,0xA0,0x0F,0x88,0x13,0x70,0x17,0x58,0x1B,0x00,0x00,0x58,0x02,0x20,0x03,0xE8,0x03,0xDC,0x05]),32,56,2,'zero',500],
       ],
@@ -688,7 +692,8 @@ export default function ECUTuneSuite() {
         const mx=Math.max(...cells);
         return pt==='zero'?(mx<thr?'DELETED':'STOCK'):(mx>30000?'DELETED':'STOCK');
       }).filter(s=>s!=='NOT_FOUND');
-      res[sys]=statuses.every(s=>s==='DELETED')?'DELETED':statuses.some(s=>s==='DELETED')?'PARTIAL':'STOCK';
+      // Guard: empty array (no sigs found) must not trigger vacuous-truth DELETED
+      res[sys]=!statuses.length?'STOCK':statuses.every(s=>s==='DELETED')?'DELETED':statuses.some(s=>s==='DELETED')?'PARTIAL':'STOCK';
     }
     return res;
   };
@@ -703,7 +708,7 @@ export default function ECUTuneSuite() {
     setEnabled(en);
     setVersions(findVersionStr(buf));
     setScanned(scanMaps(buf));
-    setDeleteStatus(detectDeletes(buf));
+    setDeleteStatus(detectDeletes(buf, selectedEcu));
     // Scan signatures for non-pending maps only
     const res={};
     ecuMaps.forEach(m=>{
