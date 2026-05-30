@@ -461,10 +461,12 @@ function runDelete(buf, maps, enabled) {
   return {buf:out, count};
 }
 
-function applyMapEdits(buf, id, vals, mapDef, scanned) {
+function applyMapEdits(buf, id, vals, mapDef, scanned, sigOffsets) {
   if (!mapDef || !buf || !vals) return buf;
-  const off=mapDef.offset??scanned?.[id]?.offset;
-  if(!off) return buf;
+  // Must mirror getMapData's offset priority exactly, or edits write to a
+  // different address than the one displayed (silent corruption on cross-version files).
+  const off=(sigOffsets&&sigOffsets[id])||mapDef.offset||scanned?.[id]?.offset;
+  if(off==null) return buf;
   const out=buf.slice(0), dv=new DataView(out);
   vals.forEach((v,i)=>{
     const p=off+i*mapDef.vBytes;
@@ -930,8 +932,10 @@ export default function ECUTuneSuite() {
         setAutoChg(null); setScanRes({}); setTab('delete');
         // Auto-detect ECU from version strings
         const vStr = findVersionStr(ab);
-        const ecuKey = vStr.some(v=>/CP41/i.test(v.text)) ? 'EDC17CP41'
-                     : vStr.some(v=>/CP45/i.test(v.text)) ? 'EDC17CP45'
+        // Bosch internal strings use "EDC17_C41"/"C45"; market name is "CP41"/"CP45".
+        // Match both forms (C41, CP41, C_41) so a real dump auto-selects the right MAP_DB.
+        const ecuKey = vStr.some(v=>/C[P_]?41/i.test(v.text)) ? 'EDC17CP41'
+                     : vStr.some(v=>/C[P_]?45/i.test(v.text)) ? 'EDC17CP45'
                      : 'EDC17CP45'; // default to CP45
         setSelectedEcu(ecuKey);
         // Run signature-based map finder
@@ -958,7 +962,7 @@ export default function ECUTuneSuite() {
     let working=patched||buf;
     for(const [id,vals] of Object.entries(mapEdits)){
       const def=MAPS_DB.find(m=>m.id===id);
-      if(def) working=applyMapEdits(working,id,vals,def,scanned);
+      if(def) working=applyMapEdits(working,id,vals,def,scanned,sigOffsets);
     }
     setPatched(working);
     setMapEdits({});
@@ -1156,8 +1160,10 @@ export default function ECUTuneSuite() {
     const iqTyp=injFullLoad.length?injFullLoad.reduce((a,b)=>a+b,0)/injFullLoad.length*0.5:55;
     // Boost — use High Load A map (0x19A3CC) as representative boost target
     const boostHla=u16at(0x19A3CC,64);
-    const boostPeak=Math.max(...boostHla.filter(v=>v>0&&v<3000))*0.5;
-    const boostTyp=boostHla.filter(v=>v>500&&v<3000).reduce((a,b)=>a+b,0)/boostHla.filter(v=>v>500&&v<3000).length*0.5||1800;
+    const boostHlaPk=boostHla.filter(v=>v>0&&v<3000);
+    const boostPeak=boostHlaPk.length?Math.max(...boostHlaPk)*0.5:1800;
+    const boostHlaTyp=boostHla.filter(v=>v>500&&v<3000);
+    const boostTyp=boostHlaTyp.length?boostHlaTyp.reduce((a,b)=>a+b,0)/boostHlaTyp.length*0.5:1800;
     // Torque limiter
     const limVals=u16at(0x150B06,64).filter(v=>v>100&&v<20000);
     const limPeak=limVals.length?Math.max(...limVals)*0.1:710;
@@ -1165,7 +1171,8 @@ export default function ECUTuneSuite() {
     const smokeVals=u16at(0x1884B6,64).filter(v=>v>100&&v<4000);
     const smokePeak=smokeVals.length?Math.max(...smokeVals)*0.5:400;
     // VGT limit (0x1B7500 raw)
-    const vgtLim=Math.max(...u16at(0x1B7500,48).filter(v=>v>0&&v<60000))*0.5;
+    const vgtVals=u16at(0x1B7500,48).filter(v=>v>0&&v<60000);
+    const vgtLim=vgtVals.length?Math.max(...vgtVals)*0.5:1500;
     return {iqPeak,iqTyp,boostPeak:Math.min(boostPeak||1800,3500),boostTyp,limPeak,smokePeak,vgtLim:Math.min(vgtLim||1500,3500)};
   };
 
@@ -1730,7 +1737,8 @@ export default function ECUTuneSuite() {
               const smSv = sm ? sm.sv : null;
               const smMv = sm ? sm.mv : null;
               const smMx = smSv ? Math.max(...smSv.filter(v=>v<60000&&v>0), 1) : 1;
-              const smMn = smSv ? Math.min(...smSv.filter(v=>v>0)) : 0;
+              const smMnPos = smSv ? smSv.filter(v=>v>0) : [];
+              const smMn = smMnPos.length ? Math.min(...smMnPos) : 0;
               // Guess best dimensions from cell count
               const guessDims = (n) => {
                 for (const nc of [16,12,10,8,6,4]) {
