@@ -134,6 +134,92 @@ const MAP_DB = {
         xLen:13,yLen:1,vBytes:2,patch:'zero',patchAll:true },
     ],
   },
+
+  // ── EDC17CP41 — BMW N57D30OL Bi-Turbo (535d/640d/X5 40d/740d F-series) ──────
+  // 16/17 maps confirmed · 1 remaining pending (SWIRL_DUTY2 — no clean axis found in bi-turbo cal)
+  EDC17CP41: {
+    color:'#22C55E', vehicle:'BMW N57D30OL · Bi-Turbo · 313hp', label:'EDC17CP41',
+    EGR: [
+      { id:'CP41_EGR_MAIN', name:'EGR Main Demand', system:'EGR',
+        note:'Full 16pt RPM axis — same as CP45, 7 cal-region copies patched',
+        sig:[0x90,0x01,0x20,0x03,0xB0,0x04,0x40,0x06,0xD0,0x07,0x60,0x09,0xF0,0x0A,0x80,0x0C,
+             0x10,0x0E,0xA0,0x0F,0x30,0x11,0xC0,0x12,0x50,0x14,0xE0,0x15,0x70,0x17,0x00,0x19],
+        xLen:16,yLen:16,vBytes:1,patch:'zero',patchAll:true },
+      { id:'CP41_EGR_ENABLE', name:'EGR Enable Thresholds', system:'EGR',
+        note:'Temp axis -120°C to +80°C — 2 cal-region hits',
+        sig:[0x88,0xFF,0x9C,0xFF,0xB0,0xFF,0xC4,0xFF,0xD8,0xFF,0xEC,0xFF,
+             0x00,0x00,0x14,0x00,0x28,0x00,0x3C,0x00,0x50,0x00],
+        xLen:11,yLen:1,vBytes:2,patch:'zero',patchAll:true },
+      { id:'CP41_EGR_VALVE_MON', name:'EGR Valve Monitor Tolerance', system:'EGR',
+        note:'1 unique hit at 0x1D0D22 — CP41 uses 0x07D0 axis point vs CP45 0x7530',
+        sig:[0xA0,0x0F,0x70,0x17,0x40,0x1F,0xD0,0x07,0x0A,0x14,0x1E,0x28,0x32],
+        xLen:1,yLen:5,vBytes:1,patch:'max',dataOffset:8 },
+      { id:'CP41_EGR_CORR', name:'EGR Correction Factor', system:'EGR',
+        note:'Same RPM axis as EGR Main — correction data starts 32B after axis',
+        sig:[0x90,0x01,0x20,0x03,0xB0,0x04,0x40,0x06,0xD0,0x07,0x60,0x09,0xF0,0x0A,0x80,0x0C,
+             0x10,0x0E,0xA0,0x0F,0x30,0x11,0xC0,0x12,0x50,0x14,0xE0,0x15,0x70,0x17,0x00,0x19],
+        xLen:16,yLen:16,vBytes:1,patch:'zero',patchAll:true,dataOffset:32 },
+    ],
+    DPF: [
+      { id:'CP41_DPF_PRESSURE_MODEL', name:'DPF Pressure Model (multi-stage)', system:'DPF',
+        note:'42 sig hits at 0xF2 intervals — first hit used with 13KB block',
+        sig:[0xA0,0x0F,0x70,0x17,0x40,0x1F,0x98,0x3A],
+        xLen:9,yLen:121,vBytes:2,patch:'zero',blockSize:13312,blockOffset:-226 },
+      { id:'CP41_DPF_SOOT_RATE', name:'DPF Soot Accumulation Rate', system:'DPF',
+        note:'1 unique hit confirmed at 0x1C5334',
+        sig:[0x05,0x0B,0x0C,0x0D,0x0F,0x10,0x11,0x13,0x1C,0x1F,0x21,0x24,0x24,0x25,0x25,0x2C],
+        xLen:8,yLen:8,vBytes:1,patch:'zero' },
+      { id:'CP41_DPF_WARN', name:'DPF Warning Thresholds', system:'DPF',
+        note:'7 threshold table hits — patchAll maxes all copies',
+        sig:[0x0A,0x00,0x14,0x00,0x1E,0x00,0x28,0x00,0x32,0x00,0x3C,0x00,
+             0x46,0x00,0x50,0x00,0x5A,0x00,0x64,0x00],
+        xLen:12,yLen:1,vBytes:2,patch:'max',patchAll:true },
+    ],
+    ADBLUE: [
+      { id:'CP41_SCR_DOSE', name:'AdBlue Dosing Request', system:'ADBLUE',
+        note:'2 hits — full 8-value load axis sig (200-1500 mg), patchAll zeroes both copies',
+        sig:[0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01,0x58,0x02,0xBC,0x02,0xE8,0x03,0xDC,0x05],
+        xLen:8,yLen:8,vBytes:2,patch:'zero',patchAll:true },
+      { id:'CP41_SCR_EFF', name:'SCR Catalyst Efficiency Monitor', system:'ADBLUE',
+        note:'5 hits — patchAll zeroes all efficiency monitor instances',
+        sig:[0x96,0x00,0xC8,0x00,0xFA,0x00,0x2C,0x01,0x5E,0x01,0x90,0x01],
+        xLen:8,yLen:8,vBytes:2,patch:'zero',patchAll:true },
+      { id:'CP41_ADBLUE_LVL', name:'AdBlue Level Thresholds', system:'ADBLUE',
+        note:'1 unique hit — extended sig (base +FA00) distinguishes from 38 common matches',
+        sig:[0x00,0x00,0x64,0x00,0xC8,0x00,0x2C,0x01,0x90,0x01,0xFA,0x00],
+        xLen:5,yLen:1,vBytes:2,patch:'zero' },
+      { id:'CP41_NOX_SET', name:'NOx Setpoint Map', system:'ADBLUE',
+        note:'1 unique hit at 0x16DBA6 — extended 12-byte sig (base +C800)',
+        sig:[0x64,0x00,0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01,0xC8,0x00],
+        xLen:8,yLen:8,vBytes:2,patch:'zero' },
+      { id:'CP41_NOX_UP_MODEL', name:'NOx Upstream Model', system:'ADBLUE',
+        note:'6 cal hits — patchAll zeroes all copies (0-300 ppm NOx concentration axis)',
+        sig:[0x00,0x00,0x32,0x00,0x64,0x00,0x96,0x00,0xC8,0x00,0xFA,0x00,0x2C,0x01],
+        xLen:7,yLen:1,vBytes:2,patch:'zero',patchAll:true },
+      { id:'CP41_NOX_FAULT_THR', name:'NOx Fault Threshold', system:'ADBLUE',
+        note:'1 unique hit — max prevents fault trigger',
+        sig:[0x00,0x00,0x32,0x00,0x64,0x00,0xF4,0x01],
+        xLen:4,yLen:1,vBytes:2,patch:'max' },
+      { id:'CP41_NOX_WARMUP', name:'NOx Warmup Delay', system:'ADBLUE',
+        note:'2 hits — patchAll maxes both, monitoring never activates',
+        sig:[0x3C,0x00,0x78,0x00,0xB4,0x00,0xF0,0x00],
+        xLen:4,yLen:1,vBytes:2,patch:'max',patchAll:true },
+    ],
+    SWIRL: [
+      { id:'CP41_SWIRL_DUTY', name:'Swirl Duty Map 1', system:'SWIRL',
+        note:'2 unique cal hits — RPM axis 1500-6000 (8pt) + load axis 600-1500 mg; data already zero in bi-turbo cal',
+        sig:[0xDC,0x05,0xD0,0x07,0xC4,0x09,0xB8,0x0B,0xAC,0x0D,0xA0,0x0F,0x88,0x13,0x70,0x17,
+             0x00,0x00,0x58,0x02,0x20,0x03,0xE8,0x03,0xDC,0x05],
+        xLen:8,yLen:8,vBytes:2,patch:'zero',patchAll:true,dataOffset:34 },
+      { id:'CP41_SWIRL_DUTY2', name:'Swirl Duty Map 2 (Low Load)', system:'SWIRL', pending:true,
+        note:'Pending — low load duty range',
+        sig:[], xLen:8,yLen:7,vBytes:2,patch:'zero',dataOffset:32 },
+      { id:'CP41_SWIRL_ENABLE', name:'Swirl Enable Conditions', system:'SWIRL',
+        note:'2 cal-region hits — identical CP45 sig works in CP41, patchAll zeroes both copies',
+        sig:[0x14,0x00,0x1E,0x00,0x32,0x00,0x46,0x00,0x5A,0x00,0x6E,0x00,0x82,0x00,0x8C,0x00],
+        xLen:13,yLen:1,vBytes:2,patch:'zero',patchAll:true },
+    ],
+  },
 };
 
 // ── Map viewer database (28 confirmed maps) ────────────────────
@@ -246,8 +332,58 @@ const COUNTER_DB = [
   },
 ];
 
+// ── IMMO OFF database ──────────────────────────────────────────
+// IMPORTANT: immobiliser data lives in the ECU EEPROM, NOT the calibration flash.
+// This module loads a SEPARATE EEPROM dump. It does not touch the 2MB cal file.
+//
+// BMW EDC17 (CP41/CP45) does not use a simple "immo-off byte" like VAG EDC17.
+// The DDE syncs with CAS/FEM via a 16-byte ISN (Individual Serial Number).
+// Real-world "immo off" jobs on these are one of:
+//   • ISN read    — recover the ISN for CAS alignment / key programming
+//   • ISN write   — write a donor ISN into a swapped/replacement DDE
+//   • Virginise   — clear the ISN lock so the DDE accepts the next CAS it pairs with
+//
+// Offsets below are SCAFFOLD ONLY (pending:true). Confirming the exact ISN block /
+// status-byte location needs a real immo-on vs immo-off EEPROM pair to diff —
+// same workflow used to confirm the calibration map signatures. We do NOT ship
+// invented EEPROM offsets: a wrong byte here is a no-start, not a warning light.
+const IMMO_DB = {
+  EDC17CP45: {
+    color:'#3B82F6', vehicle:'BMW N57 6-cyl · DDE7xx', label:'EDC17CP45',
+    // Typical BMW DDE EEPROM dump size (95320/95640 class). Used as a sanity hint only.
+    eepromHint:'Expect a small dump (512B–8KB), NOT the 2MB flash.',
+    patches: [
+      { id:'CP45_ISN_READ', name:'ISN Block (read / recover)', op:'read', pending:true,
+        note:'16-byte Individual Serial Number. Recovered for CAS alignment & key work. Located by diffing a known-ISN dump.',
+        sig:[], len:16 },
+      { id:'CP45_ISN_WRITE', name:'ISN Write (donor pairing)', op:'write', pending:true,
+        note:'Writes a donor ISN into a replacement DDE so it pairs with the original CAS. Requires the donor 16-byte ISN.',
+        sig:[], len:16 },
+      { id:'CP45_VIRGINISE', name:'Virginise (clear ISN lock)', op:'virginise', pending:true,
+        note:'Clears the ISN lock / pairing state so the DDE accepts the next CAS it is married to. Status flag location pending dump diff.',
+        sig:[], len:1 },
+    ],
+  },
+  EDC17CP41: {
+    color:'#22C55E', vehicle:'BMW N57D30OL · Bi-Turbo · DDE7xx', label:'EDC17CP41',
+    eepromHint:'Expect a small dump (512B–8KB), NOT the 2MB flash.',
+    patches: [
+      { id:'CP41_ISN_READ', name:'ISN Block (read / recover)', op:'read', pending:true,
+        note:'16-byte ISN. CP41 bi-turbo EEPROM layout may differ from CP45 — confirm against a CP41 dump before trusting offsets.',
+        sig:[], len:16 },
+      { id:'CP41_ISN_WRITE', name:'ISN Write (donor pairing)', op:'write', pending:true,
+        note:'Writes a donor ISN into a replacement CP41 DDE. Requires the donor 16-byte ISN.',
+        sig:[], len:16 },
+      { id:'CP41_VIRGINISE', name:'Virginise (clear ISN lock)', op:'virginise', pending:true,
+        note:'Clears the pairing state. Status flag location pending CP41 dump diff.',
+        sig:[], len:1 },
+    ],
+  },
+};
+
 
 function findAll(buf, sig) {
+  if (!sig || !sig.length) return [];
   const data = new Uint8Array(buf), hits = [];
   outer: for (let i = 0; i <= data.length - sig.length; i++) {
     for (let j = 0; j < sig.length; j++) if (data[i+j] !== sig[j]) continue outer;
@@ -325,10 +461,12 @@ function runDelete(buf, maps, enabled) {
   return {buf:out, count};
 }
 
-function applyMapEdits(buf, id, vals, mapDef, scanned) {
+function applyMapEdits(buf, id, vals, mapDef, scanned, sigOffsets) {
   if (!mapDef || !buf || !vals) return buf;
-  const off=mapDef.offset??scanned?.[id]?.offset;
-  if(!off) return buf;
+  // Must mirror getMapData's offset priority exactly, or edits write to a
+  // different address than the one displayed (silent corruption on cross-version files).
+  const off=(sigOffsets&&sigOffsets[id])||mapDef.offset||scanned?.[id]?.offset;
+  if(off==null) return buf;
   const out=buf.slice(0), dv=new DataView(out);
   vals.forEach((v,i)=>{
     const p=off+i*mapDef.vBytes;
@@ -461,6 +599,16 @@ export default function ECUTuneSuite() {
   const [sigConf,setSigConf]=useState({});           // id → 'found'|'approx'|'fallback'
   const [tipsSection,setTipsSection]=useState('delete');
   const [openTip,setOpenTip]=useState(null);
+  const [selectedEcu,setSelectedEcu]=useState('EDC17CP45');
+  // IMMO module state — operates on a SEPARATE EEPROM dump, not the cal flash
+  const [eeFile,setEeFile]=useState(null);
+  const [eeBuf,setEeBuf]=useState(null);
+  const [eePatched,setEePatched]=useState(null);
+  const [eeDownloadUrl,setEeDownloadUrl]=useState(null);
+  const [immoStatus,setImmoStatus]=useState(null);   // {state, isn, off}
+  const [immoOwnerAck,setImmoOwnerAck]=useState(false);
+  const [immoDonorIsn,setImmoDonorIsn]=useState(''); // hex string for ISN write
+  const [immoLog,setImmoLog]=useState([]);
   // Lambda tool state
   const [ltBoost,setLtBoost]=useState(1800);   // mbar absolute
   const [ltIQ,setLtIQ]=useState(65);           // mg/stroke
@@ -485,6 +633,20 @@ export default function ECUTuneSuite() {
     }
   },[patched]);
 
+  // Blob/data URL for patched EEPROM (IMMO module)
+  useEffect(()=>{
+    if(eeDownloadUrl) URL.revokeObjectURL(eeDownloadUrl);
+    if(eePatched){
+      const bytes=new Uint8Array(eePatched);
+      let binary='';
+      const chunk=8192;
+      for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+      setEeDownloadUrl('data:application/octet-stream;base64,'+btoa(binary));
+    } else {
+      setEeDownloadUrl(null);
+    }
+  },[eePatched]);
+
   const [log, setLog] = useState([]);     // log entries
   const [showLog, setShowLog] = useState(false);
 
@@ -501,12 +663,16 @@ export default function ECUTuneSuite() {
     entries.push({ type:'header', text:`File: ${file?.name} (${(buf.byteLength/1024/1024).toFixed(2)} MB)` });
     entries.push({ type:'divider' });
 
-    const allMapsLocal = Object.values(MAP_DB.EDC17CP45).flat();
+    const ecuDef = MAP_DB[selectedEcu] || MAP_DB.EDC17CP45;
     const sysColors = { EGR:C.amber, DPF:C.red, ADBLUE:C.blue, SWIRL:C.purple };
 
-    for(const [sys, maps] of Object.entries(MAP_DB.EDC17CP45)){
+    for(const [sys, maps] of Object.entries(ecuDef)){
       entries.push({ type:'sys', text:`── ${SYS[sys]?.label?.toUpperCase()} ──`, col:sysColors[sys] });
       for(const m of maps){
+        if(m.pending) {
+          entries.push({ type:'skip', text:`  PENDING  ${m.name} — signature not yet verified`, col:C.amber });
+          continue;
+        }
         if(!enabled[m.id]) {
           entries.push({ type:'skip', text:`  SKIP  ${m.name}`, col:C.textFaint });
           continue;
@@ -564,7 +730,7 @@ export default function ECUTuneSuite() {
   };
 
   // Detect which systems are already deleted in a binary ──────────
-  const detectDeletes = (b) => {
+  const detectDeletes = (b, ecuKey='EDC17CP45') => {
     if (!b) return {};
     const dv = new DataView(b);
     const rd1=(o,n)=>Array.from({length:n},(_,i)=>{const p=o+i;return p<b.byteLength?dv.getUint8(p):0;});
@@ -582,7 +748,11 @@ export default function ECUTuneSuite() {
         [new Uint8Array([0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01,0x58,0x02,0xBC,0x02]),12,64,2,'zero',50],
         [new Uint8Array([0x64,0x00,0xC8,0x00,0x2C,0x01,0x90,0x01,0xF4,0x01]),10,64,2,'zero',50],
       ],
-      SWIRL:[
+      // CP41 swirl: use SWIRL_ENABLE temp axis (20-140°C) — non-zero in stock, zero after delete
+      // CP45 swirl: use duty map sigs — zero data means deleted
+      SWIRL: ecuKey==='EDC17CP41' ? [
+        [new Uint8Array([0x14,0x00,0x1E,0x00,0x32,0x00,0x46,0x00,0x5A,0x00,0x6E,0x00,0x82,0x00,0x8C,0x00]),0,16,2,'zero',10],
+      ] : [
         [new Uint8Array([0xAC,0x0D,0xA0,0x0F,0x94,0x11,0x88,0x13,0x7C,0x15,0x70,0x17,0x58,0x1B,0x00,0x00,0x58,0x02,0x20,0x03,0xE8,0x03,0xDC,0x05]),32,56,2,'zero',500],
         [new Uint8Array([0xC4,0x09,0xB8,0x0B,0xAC,0x0D,0xA0,0x0F,0x88,0x13,0x70,0x17,0x58,0x1B,0x00,0x00,0x58,0x02,0x20,0x03,0xE8,0x03,0xDC,0x05]),32,56,2,'zero',500],
       ],
@@ -596,33 +766,120 @@ export default function ECUTuneSuite() {
         const mx=Math.max(...cells);
         return pt==='zero'?(mx<thr?'DELETED':'STOCK'):(mx>30000?'DELETED':'STOCK');
       }).filter(s=>s!=='NOT_FOUND');
-      res[sys]=statuses.every(s=>s==='DELETED')?'DELETED':statuses.some(s=>s==='DELETED')?'PARTIAL':'STOCK';
+      // Guard: empty array (no sigs found) must not trigger vacuous-truth DELETED
+      res[sys]=!statuses.length?'STOCK':statuses.every(s=>s==='DELETED')?'DELETED':statuses.some(s=>s==='DELETED')?'PARTIAL':'STOCK';
     }
     return res;
   };
 
-  // Run all signature scans ONCE when buf loads — never during render
+  // ── IMMO: load a separate EEPROM dump ─────────────────────────
+  const handleEeDrop = (e) => {
+    e.preventDefault?.();
+    const f = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      const ab = ev.target.result;
+      setEeFile(f); setEeBuf(ab); setEePatched(null); setImmoLog([]);
+      setImmoStatus(detectImmo(ab, selectedEcu));
+    };
+    r.readAsArrayBuffer(f);
+  };
+
+  // ── IMMO: inspect an EEPROM dump and report state ─────────────
+  // Heuristic only until ISN/status offsets are confirmed against a real dump pair.
+  const detectImmo = (b, ecuKey='EDC17CP45') => {
+    if (!b) return null;
+    const size = b.byteLength;
+    const looksLikeFlash = size > 0x40000;           // >256KB = almost certainly a flash, not EEPROM
+    const bytes = new Uint8Array(b);
+    // Entropy hint: count non-0x00/0xFF bytes — a virginised/cleared ISN region trends to 0x00 or 0xFF
+    let live = 0;
+    for (let i=0;i<bytes.length;i++){ const v=bytes[i]; if(v!==0x00&&v!==0xFF) live++; }
+    const liveRatio = bytes.length ? live/bytes.length : 0;
+    const def = IMMO_DB[ecuKey] || IMMO_DB.EDC17CP45;
+    const confirmed = def.patches.some(p=>!p.pending && p.sig?.length);
+    return {
+      size, looksLikeFlash, liveRatio,
+      // Until offsets are confirmed we cannot assert paired/virgin — report UNKNOWN honestly
+      state: confirmed ? 'READY' : 'UNCONFIRMED',
+      isn: null,
+      off: null,
+    };
+  };
+
+  // ── IMMO: apply the selected operation to the EEPROM buffer ───
+  const applyImmo = (patchDef) => {
+    if(!eeBuf || !patchDef) return;
+    const entries = [];
+    entries.push({ type:'header', text:`IMMO module — ${patchDef.name}` });
+    entries.push({ type:'header', text:`EEPROM: ${eeFile?.name} (${eeBuf.byteLength} bytes)` });
+    entries.push({ type:'divider' });
+
+    if(patchDef.pending){
+      entries.push({ type:'skip', text:`  PENDING — ${patchDef.name} offset not yet confirmed.`, col:C.amber });
+      entries.push({ type:'skip', text:`  Provide an immo-on vs immo-off EEPROM pair to diff and lock the offset.`, col:C.amber });
+      entries.push({ type:'divider' });
+      entries.push({ type:'done', text:`No bytes written — safe. (Definition is a scaffold.)`, col:C.textMid });
+      setImmoLog(entries);
+      return;
+    }
+
+    // Confirmed-offset path (runs once a real sig/offset is locked in IMMO_DB)
+    const out = eeBuf.slice(0);
+    const view = new Uint8Array(out);
+    const hits = findAll(eeBuf, new Uint8Array(patchDef.sig));
+    if(!hits.length){
+      entries.push({ type:'notfound', text:`  ✗ ISN/status signature not found in this dump.`, col:'#6B7280' });
+      setImmoLog(entries);
+      return;
+    }
+    const off = hits[0] + (patchDef.dataOffset||0);
+    if(patchDef.op==='write'){
+      const donor = (immoDonorIsn.match(/[0-9a-fA-F]{2}/g)||[]).map(h=>parseInt(h,16));
+      if(donor.length!==patchDef.len){
+        entries.push({ type:'notfound', text:`  ✗ Donor ISN must be ${patchDef.len} bytes (${patchDef.len*2} hex chars). Got ${donor.length}.`, col:C.red });
+        setImmoLog(entries);
+        return;
+      }
+      donor.forEach((v,i)=>{ if(off+i<view.length) view[off+i]=v; });
+      entries.push({ type:'patch', text:`  → Wrote ${patchDef.len}-byte donor ISN @ 0x${off.toString(16).toUpperCase()}`, col:C.green });
+    } else if(patchDef.op==='virginise'){
+      for(let i=0;i<patchDef.len&&off+i<view.length;i++) view[off+i]=0x00;
+      entries.push({ type:'patch', text:`  → Cleared ${patchDef.len}-byte ISN lock @ 0x${off.toString(16).toUpperCase()}`, col:C.green });
+    } else { // read
+      const isn = Array.from({length:patchDef.len},(_,i)=>view[off+i]?.toString(16).padStart(2,'0')).join(' ');
+      entries.push({ type:'patch', text:`  ISN @ 0x${off.toString(16).toUpperCase()}: ${isn}`, col:C.blue });
+      setImmoLog(entries);
+      return; // read does not modify
+    }
+    entries.push({ type:'divider' });
+    entries.push({ type:'done', text:`EEPROM modified in memory — verify, then write back to the chip/bench.`, col:C.green });
+    setImmoLog(entries);
+    setEePatched(out);
+  };
+
+  // Run all signature scans when buf or ECU selection changes
   useEffect(()=>{
     if(!buf) return;
-    // Enable all maps
+    const ecuMaps = Object.values(MAP_DB[selectedEcu] || MAP_DB.EDC17CP45).flat();
+    // Enable non-pending maps
     const en={};
-    Object.values(MAP_DB.EDC17CP45).flat().forEach(m=>{ en[m.id]=true; });
+    ecuMaps.forEach(m=>{ if(!m.pending) en[m.id]=true; });
     setEnabled(en);
     setVersions(findVersionStr(buf));
     setScanned(scanMaps(buf));
-    // Detect already-deleted systems
-    setDeleteStatus(detectDeletes(buf));
-    // Scan signatures — expensive, do it once here not on every render
+    setDeleteStatus(detectDeletes(buf, selectedEcu));
+    // Scan signatures for non-pending maps only
     const res={};
-    Object.values(MAP_DB.EDC17CP45).flat().forEach(m=>{
-      res[m.id]=findAll(buf,new Uint8Array(m.sig)).length;
+    ecuMaps.forEach(m=>{
+      res[m.id] = m.pending ? 0 : findAll(buf,new Uint8Array(m.sig)).length;
     });
-    // Also pre-scan counter signatures
     COUNTER_DB.forEach(ctr=>{
       res[ctr.id]=findAll(buf,new Uint8Array(ctr.sig)).length;
     });
     setScanRes(res);
-  },[buf]);
+  },[buf, selectedEcu]);
 
   // 3D canvas render
   const selDef = MAPS_DB.find(m=>m.id===selMap);
@@ -673,6 +930,14 @@ export default function ECUTuneSuite() {
       } else {
         setFile(f); setBuf(ab); setPatched(null); setMapEdits({});
         setAutoChg(null); setScanRes({}); setTab('delete');
+        // Auto-detect ECU from version strings
+        const vStr = findVersionStr(ab);
+        // Bosch internal strings use "EDC17_C41"/"C45"; market name is "CP41"/"CP45".
+        // Match both forms (C41, CP41, C_41) so a real dump auto-selects the right MAP_DB.
+        const ecuKey = vStr.some(v=>/C[P_]?41/i.test(v.text)) ? 'EDC17CP41'
+                     : vStr.some(v=>/C[P_]?45/i.test(v.text)) ? 'EDC17CP45'
+                     : 'EDC17CP45'; // default to CP45
+        setSelectedEcu(ecuKey);
         // Run signature-based map finder
         const {offsets, confidence} = findMapsInBinary(ab);
         setSigOffsets(offsets); setSigConf(confidence);
@@ -697,7 +962,7 @@ export default function ECUTuneSuite() {
     let working=patched||buf;
     for(const [id,vals] of Object.entries(mapEdits)){
       const def=MAPS_DB.find(m=>m.id===id);
-      if(def) working=applyMapEdits(working,id,vals,def,scanned);
+      if(def) working=applyMapEdits(working,id,vals,def,scanned,sigOffsets);
     }
     setPatched(working);
     setMapEdits({});
@@ -848,12 +1113,13 @@ export default function ECUTuneSuite() {
     setPct(0); setAutoChg(null);
     setLoading(false); setDownloadUrl(null);
     setLog([]); setShowLog(false);
-    setMapSearch(''); setViewType('table');
-    setMapPct(0); setAutoChanges(null);
     setCounterEnabled({'DIST_CTR':true,'CYCLE_CTR':true});
     setScanResults(null); setScanView('db'); setScanSelMap(null);
     setScanProgress(0); setScanning(false); setScanCat('All');
     setTipsSection('delete'); setOpenTip(null);
+    setSelectedEcu('EDC17CP45');
+    setEeFile(null); setEeBuf(null); setEePatched(null); setEeDownloadUrl(null);
+    setImmoStatus(null); setImmoOwnerAck(false); setImmoDonorIsn(''); setImmoLog([]);
   };
 
   // ── UI ───────────────────────────────────────────────────────
@@ -873,7 +1139,7 @@ export default function ECUTuneSuite() {
     if(iq<=0) return 99;
     const rho=boost_mbar*100/(R_AIR*T_INTAKE);
     const mAir=rho*(VD_CC*1e-6)*ETA_V;
-    return mAir/(iq*1e-6*AFR_STOICH*1000);
+    return mAir/(iq*1e-6*AFR_STOICH);
   };
   const calcEGT=(iq,boost_mbar)=>{
     if(iq<=0) return 200;
@@ -894,8 +1160,10 @@ export default function ECUTuneSuite() {
     const iqTyp=injFullLoad.length?injFullLoad.reduce((a,b)=>a+b,0)/injFullLoad.length*0.5:55;
     // Boost — use High Load A map (0x19A3CC) as representative boost target
     const boostHla=u16at(0x19A3CC,64);
-    const boostPeak=Math.max(...boostHla.filter(v=>v>0&&v<3000))*0.5;
-    const boostTyp=boostHla.filter(v=>v>500&&v<3000).reduce((a,b)=>a+b,0)/boostHla.filter(v=>v>500&&v<3000).length*0.5||1800;
+    const boostHlaPk=boostHla.filter(v=>v>0&&v<3000);
+    const boostPeak=boostHlaPk.length?Math.max(...boostHlaPk)*0.5:1800;
+    const boostHlaTyp=boostHla.filter(v=>v>500&&v<3000);
+    const boostTyp=boostHlaTyp.length?boostHlaTyp.reduce((a,b)=>a+b,0)/boostHlaTyp.length*0.5:1800;
     // Torque limiter
     const limVals=u16at(0x150B06,64).filter(v=>v>100&&v<20000);
     const limPeak=limVals.length?Math.max(...limVals)*0.1:710;
@@ -903,7 +1171,8 @@ export default function ECUTuneSuite() {
     const smokeVals=u16at(0x1884B6,64).filter(v=>v>100&&v<4000);
     const smokePeak=smokeVals.length?Math.max(...smokeVals)*0.5:400;
     // VGT limit (0x1B7500 raw)
-    const vgtLim=Math.max(...u16at(0x1B7500,48).filter(v=>v>0&&v<60000))*0.5;
+    const vgtVals=u16at(0x1B7500,48).filter(v=>v>0&&v<60000);
+    const vgtLim=vgtVals.length?Math.max(...vgtVals)*0.5:1500;
     return {iqPeak,iqTyp,boostPeak:Math.min(boostPeak||1800,3500),boostTyp,limPeak,smokePeak,vgtLim:Math.min(vgtLim||1500,3500)};
   };
 
@@ -968,7 +1237,7 @@ export default function ECUTuneSuite() {
 
         {/* ── Sidebar ── */}
         <div className="sidebar" style={{width:'200px',flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',gap:'4px',padding:'12px 8px'}}>
-          {[['delete','Delete / DTCs','🛡'],['maps','Map Editor','🗺'],['safety','Safety Check','⚠'],['tips','Tuning Tips','💡'],['export','Export','↓']].map(([id,label,icon])=>(
+          {[['delete','Delete / DTCs','🛡'],['maps','Map Editor','🗺'],['immo','IMMO / EEPROM','🔑'],['safety','Safety Check','⚠'],['tips','Tuning Tips','💡'],['export','Export','↓']].map(([id,label,icon])=>(
             <button key={id} onClick={()=>setTab(id)}
               style={{width:'100%',padding:'9px 12px',textAlign:'left',border:'none',borderRadius:'7px',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',fontSize:'12px',fontWeight:600,transition:'all .15s',
                 background:tab===id?C.surface2:C.surface,
@@ -991,12 +1260,9 @@ export default function ECUTuneSuite() {
         <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
           {/* No file */}
-          {noFile&&(
+          {noFile&&tab!=='immo'&&(
             <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px'}}>
               <div style={{maxWidth:'440px',width:'100%',textAlign:'center'}}>
-                <div style={{fontSize:'40px',marginBottom:'16px'}}>⚙️</div>
-                <div style={{fontSize:'20px',fontWeight:700,marginBottom:'8px'}}>ECU Tune Suite</div>
-                <div style={{fontSize:'13px',color:C.textMid,marginBottom:'28px',lineHeight:1.7}}>Professional BMW diesel ECU calibration.<br/>EGR · DPF · AdBlue · Swirl delete + Stage tuning.</div>
                 {loading?(
                   <div style={{textAlign:'center',padding:'60px',color:C.textMid}}>
                     <div style={{fontSize:'24px',marginBottom:'12px'}}>⏳</div>
@@ -1031,6 +1297,28 @@ export default function ECUTuneSuite() {
           {/* ─── DELETE TAB ─── */}
           {!noFile&&tab==='delete'&&(
             <div style={{flex:1,overflow:'auto',padding:'20px'}}>
+              {/* ECU selector */}
+              <div style={{marginBottom:'10px',display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
+                <span style={{fontSize:'10px',fontWeight:700,color:C.textFaint,letterSpacing:'.08em',textTransform:'uppercase',marginRight:'2px'}}>ECU:</span>
+                {Object.entries(MAP_DB).map(([key,ecu])=>{
+                  const active=selectedEcu===key;
+                  const allPending=Object.values(ecu).flat().every(m=>m.pending);
+                  return (
+                    <button key={key} onClick={()=>setSelectedEcu(key)}
+                      style={{padding:'5px 12px',fontSize:'11px',fontWeight:700,borderRadius:'5px',cursor:'pointer',
+                        border:`1px solid ${active?ecu.color+'88':C.border}`,
+                        background:active?ecu.color+'22':C.surface2,
+                        color:active?ecu.color:C.textMid,transition:'all .15s',
+                        display:'flex',alignItems:'center',gap:'6px'}}>
+                      <span style={{width:'7px',height:'7px',borderRadius:'50%',background:active?ecu.color:C.border,display:'inline-block',flexShrink:0}}/>
+                      {key}
+                      {allPending&&<span style={{fontSize:'8px',fontWeight:700,color:C.amber,background:C.amber+'22',border:`1px solid ${C.amber}44`,borderRadius:'3px',padding:'1px 4px'}}>PENDING</span>}
+                    </button>
+                  );
+                })}
+                <span style={{fontSize:'10px',color:C.textFaint,marginLeft:'4px'}}>{(MAP_DB[selectedEcu]||MAP_DB.EDC17CP45).vehicle}</span>
+              </div>
+
               {/* File status summary banner */}
               {Object.keys(deleteStatus).length>0&&(
                 <div style={{marginBottom:'12px',padding:'10px 14px',background:C.surface,border:`1px solid ${C.border}`,borderRadius:'8px',display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
@@ -1054,7 +1342,7 @@ export default function ECUTuneSuite() {
               <div style={{display:'flex',gap:'6px',marginBottom:'16px',flexWrap:'wrap'}}>
                 {Object.entries(SYS).map(([key,s])=>{
                   const sysActive=delSys===key;
-                  const maps=MAP_DB.EDC17CP45[key]||[];
+                  const maps=(MAP_DB[selectedEcu]||MAP_DB.EDC17CP45)[key]||[];
                   const found=maps.filter(m=>(scanRes[m.id]||0)>0).length;
                   const delStat=deleteStatus[key];
                   const statCol=delStat==='DELETED'?C.green:delStat==='PARTIAL'?C.amber:null;
@@ -1314,10 +1602,27 @@ export default function ECUTuneSuite() {
                   <div style={{fontSize:'11px',fontWeight:700,color:C.textFaint,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'10px'}}>
                     Calibration Maps — {delSys}
                   </div>
-                  {(MAP_DB.EDC17CP45[delSys]||[]).map(m=>{
+                  {((MAP_DB[selectedEcu]||MAP_DB.EDC17CP45)[delSys]||[]).map(m=>{
                     const hits=scanRes[m.id]||0;
                     const found=hits>0;
                     const sys=SYS[delSys];
+                    if(m.pending) return (
+                      <div key={m.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 10px',
+                        borderRadius:'6px',marginBottom:'4px',background:C.amberDim+'11',
+                        border:`1px solid ${C.amber}33`,opacity:0.7}}>
+                        <div style={{width:'18px',height:'18px',border:`2px solid ${C.amber}66`,borderRadius:'4px',
+                          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'transparent'}}>
+                          <span style={{color:C.amber,fontSize:'10px',fontWeight:900}}>?</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'11px',fontWeight:600,color:C.textMid}}>{m.name}</div>
+                          <div style={{fontSize:'9px',color:C.textFaint,marginTop:'1px'}}>{m.note}</div>
+                        </div>
+                        <div className="badge" style={{background:C.amber+'22',color:C.amber,border:`1px solid ${C.amber}44`}}>
+                          PENDING
+                        </div>
+                      </div>
+                    );
                     return (
                       <div key={m.id} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 10px',
                         borderRadius:'6px',marginBottom:'4px',background:enabled[m.id]&&found?sys.bg+'44':C.surface2,
@@ -1432,7 +1737,8 @@ export default function ECUTuneSuite() {
               const smSv = sm ? sm.sv : null;
               const smMv = sm ? sm.mv : null;
               const smMx = smSv ? Math.max(...smSv.filter(v=>v<60000&&v>0), 1) : 1;
-              const smMn = smSv ? Math.min(...smSv.filter(v=>v>0)) : 0;
+              const smMnPos = smSv ? smSv.filter(v=>v>0) : [];
+              const smMn = smMnPos.length ? Math.min(...smMnPos) : 0;
               // Guess best dimensions from cell count
               const guessDims = (n) => {
                 for (const nc of [16,12,10,8,6,4]) {
@@ -1848,6 +2154,133 @@ export default function ECUTuneSuite() {
                       {' '}Bosch ID: <span style={{fontFamily:'monospace',color:C.textMid}}>{selDef.bosch||'—'}</span>
                     </div>}
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ─── IMMO / EEPROM TAB ─── */}
+          {tab==='immo'&&(()=>{
+            const def = IMMO_DB[selectedEcu] || IMMO_DB.EDC17CP45;
+            return (
+              <div style={{flex:1,overflow:'auto',padding:'20px'}}>
+                <div style={{maxWidth:'720px',margin:'0 auto',display:'flex',flexDirection:'column',gap:'14px'}}>
+
+                  <div>
+                    <div style={{fontSize:'16px',fontWeight:700}}>IMMO / EEPROM Tool</div>
+                    <div style={{fontSize:'11px',color:C.textMid,marginTop:'3px'}}>
+                      Operates on a <b style={{color:C.text}}>separate EEPROM dump</b> — not the 2&nbsp;MB calibration flash. Load the DDE EEPROM read here.
+                    </div>
+                  </div>
+
+                  {/* How it works */}
+                  <div className="card">
+                    <div style={{fontSize:'11px',fontWeight:700,color:C.textFaint,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'8px'}}>BMW DDE — how IMMO works here</div>
+                    <div style={{fontSize:'11px',color:C.textMid,lineHeight:1.7}}>
+                      BMW EDC17 doesn't have a simple "immo-off byte". The DDE pairs with CAS/FEM via a 16-byte
+                      <b style={{color:C.text}}> ISN (Individual Serial Number)</b> stored in the EEPROM. Legitimate jobs are:
+                      <b style={{color:C.text}}> read</b> the ISN (for key/CAS work), <b style={{color:C.text}}>write</b> a donor ISN (replacement DDE),
+                      or <b style={{color:C.text}}>virginise</b> (clear the pairing so it accepts a new CAS). A wrong byte here is a
+                      <b style={{color:C.red}}> no-start</b> — these definitions ship as scaffolds until confirmed against a real dump pair.
+                    </div>
+                  </div>
+
+                  {/* Ownership gate */}
+                  <div className="card" style={{background:C.amberDim+'18',borderColor:C.amber+'44'}}>
+                    <label style={{display:'flex',gap:'10px',alignItems:'flex-start',cursor:'pointer'}}>
+                      <input type="checkbox" checked={immoOwnerAck} onChange={e=>setImmoOwnerAck(e.target.checked)}
+                        style={{marginTop:'2px',width:'15px',height:'15px',accentColor:C.amber,flexShrink:0}}/>
+                      <span style={{fontSize:'11px',color:C.textMid,lineHeight:1.6}}>
+                        I confirm this EEPROM is from a vehicle I own or am authorised to work on, and I have records for this job.
+                        Immobiliser work is vehicle-security work — keep proof of ownership on file.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* EEPROM loader */}
+                  {!eeBuf ? (
+                    <div
+                      onDrop={immoOwnerAck?handleEeDrop:undefined}
+                      onDragOver={e=>e.preventDefault()}
+                      style={{border:`2px dashed ${immoOwnerAck?C.border2:C.border}`,borderRadius:'10px',padding:'34px',textAlign:'center',
+                        opacity:immoOwnerAck?1:0.5,pointerEvents:immoOwnerAck?'auto':'none',transition:'all .15s'}}>
+                      <div style={{fontSize:'22px',marginBottom:'8px'}}>🔑</div>
+                      <div style={{fontSize:'13px',fontWeight:600,color:C.text}}>Drop EEPROM dump here</div>
+                      <div style={{fontSize:'10px',color:C.textFaint,margin:'4px 0 12px'}}>{def.eepromHint}</div>
+                      <label style={{...btn(C.blue),display:'inline-block',cursor:'pointer'}}>
+                        Browse EEPROM file
+                        <input type="file" style={{display:'none'}} onChange={handleEeDrop}/>
+                      </label>
+                      {!immoOwnerAck&&<div style={{fontSize:'10px',color:C.amber,marginTop:'12px'}}>Tick the confirmation above to enable.</div>}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Loaded EEPROM status */}
+                      <div className="card" style={{display:'flex',flexWrap:'wrap',gap:'14px',alignItems:'center'}}>
+                        <div style={{flex:1,minWidth:'180px'}}>
+                          <div style={{fontSize:'12px',fontWeight:700,color:C.text,wordBreak:'break-all'}}>{eeFile?.name}</div>
+                          <div style={{fontSize:'10px',color:C.textMid}}>{eeBuf.byteLength} bytes · {selectedEcu}</div>
+                        </div>
+                        {immoStatus?.looksLikeFlash&&(
+                          <span style={{fontSize:'10px',fontWeight:700,color:C.red,background:C.redDim+'33',border:`1px solid ${C.red}55`,borderRadius:'5px',padding:'4px 8px'}}>
+                            ⚠ This looks like a flash file, not an EEPROM
+                          </span>
+                        )}
+                        <span style={{fontSize:'10px',fontWeight:700,
+                          color:immoStatus?.state==='READY'?C.green:C.amber,
+                          background:(immoStatus?.state==='READY'?C.greenDim:C.amberDim)+'33',
+                          border:`1px solid ${(immoStatus?.state==='READY'?C.green:C.amber)}55`,borderRadius:'5px',padding:'4px 8px'}}>
+                          {immoStatus?.state==='READY'?'● Offsets confirmed':'◑ Unconfirmed — scaffold'}
+                        </span>
+                        <button onClick={()=>{setEeFile(null);setEeBuf(null);setEePatched(null);setImmoStatus(null);setImmoLog([]);}}
+                          style={{...btn(C.textMid,C.surface2),padding:'5px 12px'}}>Clear</button>
+                      </div>
+
+                      {/* Operations */}
+                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        {def.patches.map(p=>(
+                          <div key={p.id} className="card" style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                              <span style={{fontSize:'12px',fontWeight:700,color:C.text}}>{p.name}</span>
+                              <span style={{fontSize:'8px',fontWeight:700,color:C.textMid,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:'3px',padding:'1px 5px',textTransform:'uppercase',letterSpacing:'.04em'}}>{p.op}</span>
+                              {p.pending&&<span style={{fontSize:'8px',fontWeight:700,color:C.amber,background:C.amber+'22',border:`1px solid ${C.amber}44`,borderRadius:'3px',padding:'1px 5px'}}>PENDING</span>}
+                            </div>
+                            <div style={{fontSize:'10px',color:C.textMid,lineHeight:1.6}}>{p.note}</div>
+                            {p.op==='write'&&(
+                              <input className="input-sm" placeholder="Donor ISN — 16 bytes hex e.g. 1A 2B 3C…"
+                                value={immoDonorIsn} onChange={e=>setImmoDonorIsn(e.target.value)}/>
+                            )}
+                            <div>
+                              <button onClick={()=>applyImmo(p)}
+                                style={{...btn(p.op==='read'?C.blue:p.op==='virginise'?C.purple:C.green),padding:'6px 14px',opacity:p.pending?0.7:1}}>
+                                {p.op==='read'?'Read ISN':p.op==='write'?'Write Donor ISN':'Virginise'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Log */}
+                      {immoLog.length>0&&(
+                        <div style={{background:'#070A0E',border:`1px solid ${C.border}`,borderRadius:'8px',padding:'12px 14px',fontFamily:"'Courier New',monospace",fontSize:'11px',lineHeight:1.8}}>
+                          {immoLog.map((e,i)=>e.type==='divider'
+                            ? <div key={i} style={{borderTop:`1px solid ${C.border}`,margin:'6px 0'}}/>
+                            : <div key={i} style={{color:e.col||C.textMid,whiteSpace:'pre-wrap'}}>{e.text}</div>)}
+                        </div>
+                      )}
+
+                      {/* Export patched EEPROM */}
+                      {eePatched&&eeDownloadUrl&&(
+                        <a href={eeDownloadUrl}
+                          download={(eeFile?.name||'eeprom').replace(/\.(bin|eep)$/i,'')+'_immo_modified.bin'}
+                          style={{padding:'10px',fontSize:'12px',fontWeight:700,textAlign:'center',
+                            background:'#166534',border:'1px solid #22C55E',borderRadius:'6px',color:'#22C55E',
+                            textDecoration:'none'}}>
+                          ↓ Download Modified EEPROM
+                        </a>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             );
