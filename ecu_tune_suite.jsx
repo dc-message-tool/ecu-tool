@@ -332,6 +332,55 @@ const COUNTER_DB = [
   },
 ];
 
+// ── IMMO OFF database ──────────────────────────────────────────
+// IMPORTANT: immobiliser data lives in the ECU EEPROM, NOT the calibration flash.
+// This module loads a SEPARATE EEPROM dump. It does not touch the 2MB cal file.
+//
+// BMW EDC17 (CP41/CP45) does not use a simple "immo-off byte" like VAG EDC17.
+// The DDE syncs with CAS/FEM via a 16-byte ISN (Individual Serial Number).
+// Real-world "immo off" jobs on these are one of:
+//   • ISN read    — recover the ISN for CAS alignment / key programming
+//   • ISN write   — write a donor ISN into a swapped/replacement DDE
+//   • Virginise   — clear the ISN lock so the DDE accepts the next CAS it pairs with
+//
+// Offsets below are SCAFFOLD ONLY (pending:true). Confirming the exact ISN block /
+// status-byte location needs a real immo-on vs immo-off EEPROM pair to diff —
+// same workflow used to confirm the calibration map signatures. We do NOT ship
+// invented EEPROM offsets: a wrong byte here is a no-start, not a warning light.
+const IMMO_DB = {
+  EDC17CP45: {
+    color:'#3B82F6', vehicle:'BMW N57 6-cyl · DDE7xx', label:'EDC17CP45',
+    // Typical BMW DDE EEPROM dump size (95320/95640 class). Used as a sanity hint only.
+    eepromHint:'Expect a small dump (512B–8KB), NOT the 2MB flash.',
+    patches: [
+      { id:'CP45_ISN_READ', name:'ISN Block (read / recover)', op:'read', pending:true,
+        note:'16-byte Individual Serial Number. Recovered for CAS alignment & key work. Located by diffing a known-ISN dump.',
+        sig:[], len:16 },
+      { id:'CP45_ISN_WRITE', name:'ISN Write (donor pairing)', op:'write', pending:true,
+        note:'Writes a donor ISN into a replacement DDE so it pairs with the original CAS. Requires the donor 16-byte ISN.',
+        sig:[], len:16 },
+      { id:'CP45_VIRGINISE', name:'Virginise (clear ISN lock)', op:'virginise', pending:true,
+        note:'Clears the ISN lock / pairing state so the DDE accepts the next CAS it is married to. Status flag location pending dump diff.',
+        sig:[], len:1 },
+    ],
+  },
+  EDC17CP41: {
+    color:'#22C55E', vehicle:'BMW N57D30OL · Bi-Turbo · DDE7xx', label:'EDC17CP41',
+    eepromHint:'Expect a small dump (512B–8KB), NOT the 2MB flash.',
+    patches: [
+      { id:'CP41_ISN_READ', name:'ISN Block (read / recover)', op:'read', pending:true,
+        note:'16-byte ISN. CP41 bi-turbo EEPROM layout may differ from CP45 — confirm against a CP41 dump before trusting offsets.',
+        sig:[], len:16 },
+      { id:'CP41_ISN_WRITE', name:'ISN Write (donor pairing)', op:'write', pending:true,
+        note:'Writes a donor ISN into a replacement CP41 DDE. Requires the donor 16-byte ISN.',
+        sig:[], len:16 },
+      { id:'CP41_VIRGINISE', name:'Virginise (clear ISN lock)', op:'virginise', pending:true,
+        note:'Clears the pairing state. Status flag location pending CP41 dump diff.',
+        sig:[], len:1 },
+    ],
+  },
+};
+
 
 function findAll(buf, sig) {
   if (!sig || !sig.length) return [];
@@ -549,6 +598,15 @@ export default function ECUTuneSuite() {
   const [tipsSection,setTipsSection]=useState('delete');
   const [openTip,setOpenTip]=useState(null);
   const [selectedEcu,setSelectedEcu]=useState('EDC17CP45');
+  // IMMO module state — operates on a SEPARATE EEPROM dump, not the cal flash
+  const [eeFile,setEeFile]=useState(null);
+  const [eeBuf,setEeBuf]=useState(null);
+  const [eePatched,setEePatched]=useState(null);
+  const [eeDownloadUrl,setEeDownloadUrl]=useState(null);
+  const [immoStatus,setImmoStatus]=useState(null);   // {state, isn, off}
+  const [immoOwnerAck,setImmoOwnerAck]=useState(false);
+  const [immoDonorIsn,setImmoDonorIsn]=useState(''); // hex string for ISN write
+  const [immoLog,setImmoLog]=useState([]);
   // Lambda tool state
   const [ltBoost,setLtBoost]=useState(1800);   // mbar absolute
   const [ltIQ,setLtIQ]=useState(65);           // mg/stroke
@@ -572,6 +630,20 @@ export default function ECUTuneSuite() {
       setDownloadUrl(null);
     }
   },[patched]);
+
+  // Blob/data URL for patched EEPROM (IMMO module)
+  useEffect(()=>{
+    if(eeDownloadUrl) URL.revokeObjectURL(eeDownloadUrl);
+    if(eePatched){
+      const bytes=new Uint8Array(eePatched);
+      let binary='';
+      const chunk=8192;
+      for(let i=0;i<bytes.length;i+=chunk) binary+=String.fromCharCode(...bytes.subarray(i,i+chunk));
+      setEeDownloadUrl('data:application/octet-stream;base64,'+btoa(binary));
+    } else {
+      setEeDownloadUrl(null);
+    }
+  },[eePatched]);
 
   const [log, setLog] = useState([]);     // log entries
   const [showLog, setShowLog] = useState(false);
@@ -696,6 +768,93 @@ export default function ECUTuneSuite() {
       res[sys]=!statuses.length?'STOCK':statuses.every(s=>s==='DELETED')?'DELETED':statuses.some(s=>s==='DELETED')?'PARTIAL':'STOCK';
     }
     return res;
+  };
+
+  // ── IMMO: load a separate EEPROM dump ─────────────────────────
+  const handleEeDrop = (e) => {
+    e.preventDefault?.();
+    const f = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      const ab = ev.target.result;
+      setEeFile(f); setEeBuf(ab); setEePatched(null); setImmoLog([]);
+      setImmoStatus(detectImmo(ab, selectedEcu));
+    };
+    r.readAsArrayBuffer(f);
+  };
+
+  // ── IMMO: inspect an EEPROM dump and report state ─────────────
+  // Heuristic only until ISN/status offsets are confirmed against a real dump pair.
+  const detectImmo = (b, ecuKey='EDC17CP45') => {
+    if (!b) return null;
+    const size = b.byteLength;
+    const looksLikeFlash = size > 0x40000;           // >256KB = almost certainly a flash, not EEPROM
+    const bytes = new Uint8Array(b);
+    // Entropy hint: count non-0x00/0xFF bytes — a virginised/cleared ISN region trends to 0x00 or 0xFF
+    let live = 0;
+    for (let i=0;i<bytes.length;i++){ const v=bytes[i]; if(v!==0x00&&v!==0xFF) live++; }
+    const liveRatio = bytes.length ? live/bytes.length : 0;
+    const def = IMMO_DB[ecuKey] || IMMO_DB.EDC17CP45;
+    const confirmed = def.patches.some(p=>!p.pending && p.sig?.length);
+    return {
+      size, looksLikeFlash, liveRatio,
+      // Until offsets are confirmed we cannot assert paired/virgin — report UNKNOWN honestly
+      state: confirmed ? 'READY' : 'UNCONFIRMED',
+      isn: null,
+      off: null,
+    };
+  };
+
+  // ── IMMO: apply the selected operation to the EEPROM buffer ───
+  const applyImmo = (patchDef) => {
+    if(!eeBuf || !patchDef) return;
+    const entries = [];
+    entries.push({ type:'header', text:`IMMO module — ${patchDef.name}` });
+    entries.push({ type:'header', text:`EEPROM: ${eeFile?.name} (${eeBuf.byteLength} bytes)` });
+    entries.push({ type:'divider' });
+
+    if(patchDef.pending){
+      entries.push({ type:'skip', text:`  PENDING — ${patchDef.name} offset not yet confirmed.`, col:C.amber });
+      entries.push({ type:'skip', text:`  Provide an immo-on vs immo-off EEPROM pair to diff and lock the offset.`, col:C.amber });
+      entries.push({ type:'divider' });
+      entries.push({ type:'done', text:`No bytes written — safe. (Definition is a scaffold.)`, col:C.textMid });
+      setImmoLog(entries);
+      return;
+    }
+
+    // Confirmed-offset path (runs once a real sig/offset is locked in IMMO_DB)
+    const out = eeBuf.slice(0);
+    const view = new Uint8Array(out);
+    const hits = findAll(eeBuf, new Uint8Array(patchDef.sig));
+    if(!hits.length){
+      entries.push({ type:'notfound', text:`  ✗ ISN/status signature not found in this dump.`, col:'#6B7280' });
+      setImmoLog(entries);
+      return;
+    }
+    const off = hits[0] + (patchDef.dataOffset||0);
+    if(patchDef.op==='write'){
+      const donor = (immoDonorIsn.match(/[0-9a-fA-F]{2}/g)||[]).map(h=>parseInt(h,16));
+      if(donor.length!==patchDef.len){
+        entries.push({ type:'notfound', text:`  ✗ Donor ISN must be ${patchDef.len} bytes (${patchDef.len*2} hex chars). Got ${donor.length}.`, col:C.red });
+        setImmoLog(entries);
+        return;
+      }
+      donor.forEach((v,i)=>{ if(off+i<view.length) view[off+i]=v; });
+      entries.push({ type:'patch', text:`  → Wrote ${patchDef.len}-byte donor ISN @ 0x${off.toString(16).toUpperCase()}`, col:C.green });
+    } else if(patchDef.op==='virginise'){
+      for(let i=0;i<patchDef.len&&off+i<view.length;i++) view[off+i]=0x00;
+      entries.push({ type:'patch', text:`  → Cleared ${patchDef.len}-byte ISN lock @ 0x${off.toString(16).toUpperCase()}`, col:C.green });
+    } else { // read
+      const isn = Array.from({length:patchDef.len},(_,i)=>view[off+i]?.toString(16).padStart(2,'0')).join(' ');
+      entries.push({ type:'patch', text:`  ISN @ 0x${off.toString(16).toUpperCase()}: ${isn}`, col:C.blue });
+      setImmoLog(entries);
+      return; // read does not modify
+    }
+    entries.push({ type:'divider' });
+    entries.push({ type:'done', text:`EEPROM modified in memory — verify, then write back to the chip/bench.`, col:C.green });
+    setImmoLog(entries);
+    setEePatched(out);
   };
 
   // Run all signature scans when buf or ECU selection changes
@@ -955,6 +1114,8 @@ export default function ECUTuneSuite() {
     setScanProgress(0); setScanning(false); setScanCat('All');
     setTipsSection('delete'); setOpenTip(null);
     setSelectedEcu('EDC17CP45');
+    setEeFile(null); setEeBuf(null); setEePatched(null); setEeDownloadUrl(null);
+    setImmoStatus(null); setImmoOwnerAck(false); setImmoDonorIsn(''); setImmoLog([]);
   };
 
   // ── UI ───────────────────────────────────────────────────────
@@ -1069,7 +1230,7 @@ export default function ECUTuneSuite() {
 
         {/* ── Sidebar ── */}
         <div className="sidebar" style={{width:'200px',flexShrink:0,background:C.surface,borderRight:`1px solid ${C.border}`,display:'flex',flexDirection:'column',gap:'4px',padding:'12px 8px'}}>
-          {[['delete','Delete / DTCs','🛡'],['maps','Map Editor','🗺'],['safety','Safety Check','⚠'],['tips','Tuning Tips','💡'],['export','Export','↓']].map(([id,label,icon])=>(
+          {[['delete','Delete / DTCs','🛡'],['maps','Map Editor','🗺'],['immo','IMMO / EEPROM','🔑'],['safety','Safety Check','⚠'],['tips','Tuning Tips','💡'],['export','Export','↓']].map(([id,label,icon])=>(
             <button key={id} onClick={()=>setTab(id)}
               style={{width:'100%',padding:'9px 12px',textAlign:'left',border:'none',borderRadius:'7px',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',fontSize:'12px',fontWeight:600,transition:'all .15s',
                 background:tab===id?C.surface2:C.surface,
@@ -1092,7 +1253,7 @@ export default function ECUTuneSuite() {
         <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
 
           {/* No file */}
-          {noFile&&(
+          {noFile&&tab!=='immo'&&(
             <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px'}}>
               <div style={{maxWidth:'440px',width:'100%',textAlign:'center'}}>
                 {loading?(
@@ -1985,6 +2146,133 @@ export default function ECUTuneSuite() {
                       {' '}Bosch ID: <span style={{fontFamily:'monospace',color:C.textMid}}>{selDef.bosch||'—'}</span>
                     </div>}
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ─── IMMO / EEPROM TAB ─── */}
+          {tab==='immo'&&(()=>{
+            const def = IMMO_DB[selectedEcu] || IMMO_DB.EDC17CP45;
+            return (
+              <div style={{flex:1,overflow:'auto',padding:'20px'}}>
+                <div style={{maxWidth:'720px',margin:'0 auto',display:'flex',flexDirection:'column',gap:'14px'}}>
+
+                  <div>
+                    <div style={{fontSize:'16px',fontWeight:700}}>IMMO / EEPROM Tool</div>
+                    <div style={{fontSize:'11px',color:C.textMid,marginTop:'3px'}}>
+                      Operates on a <b style={{color:C.text}}>separate EEPROM dump</b> — not the 2&nbsp;MB calibration flash. Load the DDE EEPROM read here.
+                    </div>
+                  </div>
+
+                  {/* How it works */}
+                  <div className="card">
+                    <div style={{fontSize:'11px',fontWeight:700,color:C.textFaint,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'8px'}}>BMW DDE — how IMMO works here</div>
+                    <div style={{fontSize:'11px',color:C.textMid,lineHeight:1.7}}>
+                      BMW EDC17 doesn't have a simple "immo-off byte". The DDE pairs with CAS/FEM via a 16-byte
+                      <b style={{color:C.text}}> ISN (Individual Serial Number)</b> stored in the EEPROM. Legitimate jobs are:
+                      <b style={{color:C.text}}> read</b> the ISN (for key/CAS work), <b style={{color:C.text}}>write</b> a donor ISN (replacement DDE),
+                      or <b style={{color:C.text}}>virginise</b> (clear the pairing so it accepts a new CAS). A wrong byte here is a
+                      <b style={{color:C.red}}> no-start</b> — these definitions ship as scaffolds until confirmed against a real dump pair.
+                    </div>
+                  </div>
+
+                  {/* Ownership gate */}
+                  <div className="card" style={{background:C.amberDim+'18',borderColor:C.amber+'44'}}>
+                    <label style={{display:'flex',gap:'10px',alignItems:'flex-start',cursor:'pointer'}}>
+                      <input type="checkbox" checked={immoOwnerAck} onChange={e=>setImmoOwnerAck(e.target.checked)}
+                        style={{marginTop:'2px',width:'15px',height:'15px',accentColor:C.amber,flexShrink:0}}/>
+                      <span style={{fontSize:'11px',color:C.textMid,lineHeight:1.6}}>
+                        I confirm this EEPROM is from a vehicle I own or am authorised to work on, and I have records for this job.
+                        Immobiliser work is vehicle-security work — keep proof of ownership on file.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* EEPROM loader */}
+                  {!eeBuf ? (
+                    <div
+                      onDrop={immoOwnerAck?handleEeDrop:undefined}
+                      onDragOver={e=>e.preventDefault()}
+                      style={{border:`2px dashed ${immoOwnerAck?C.border2:C.border}`,borderRadius:'10px',padding:'34px',textAlign:'center',
+                        opacity:immoOwnerAck?1:0.5,pointerEvents:immoOwnerAck?'auto':'none',transition:'all .15s'}}>
+                      <div style={{fontSize:'22px',marginBottom:'8px'}}>🔑</div>
+                      <div style={{fontSize:'13px',fontWeight:600,color:C.text}}>Drop EEPROM dump here</div>
+                      <div style={{fontSize:'10px',color:C.textFaint,margin:'4px 0 12px'}}>{def.eepromHint}</div>
+                      <label style={{...btn(C.blue),display:'inline-block',cursor:'pointer'}}>
+                        Browse EEPROM file
+                        <input type="file" style={{display:'none'}} onChange={handleEeDrop}/>
+                      </label>
+                      {!immoOwnerAck&&<div style={{fontSize:'10px',color:C.amber,marginTop:'12px'}}>Tick the confirmation above to enable.</div>}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Loaded EEPROM status */}
+                      <div className="card" style={{display:'flex',flexWrap:'wrap',gap:'14px',alignItems:'center'}}>
+                        <div style={{flex:1,minWidth:'180px'}}>
+                          <div style={{fontSize:'12px',fontWeight:700,color:C.text,wordBreak:'break-all'}}>{eeFile?.name}</div>
+                          <div style={{fontSize:'10px',color:C.textMid}}>{eeBuf.byteLength} bytes · {selectedEcu}</div>
+                        </div>
+                        {immoStatus?.looksLikeFlash&&(
+                          <span style={{fontSize:'10px',fontWeight:700,color:C.red,background:C.redDim+'33',border:`1px solid ${C.red}55`,borderRadius:'5px',padding:'4px 8px'}}>
+                            ⚠ This looks like a flash file, not an EEPROM
+                          </span>
+                        )}
+                        <span style={{fontSize:'10px',fontWeight:700,
+                          color:immoStatus?.state==='READY'?C.green:C.amber,
+                          background:(immoStatus?.state==='READY'?C.greenDim:C.amberDim)+'33',
+                          border:`1px solid ${(immoStatus?.state==='READY'?C.green:C.amber)}55`,borderRadius:'5px',padding:'4px 8px'}}>
+                          {immoStatus?.state==='READY'?'● Offsets confirmed':'◑ Unconfirmed — scaffold'}
+                        </span>
+                        <button onClick={()=>{setEeFile(null);setEeBuf(null);setEePatched(null);setImmoStatus(null);setImmoLog([]);}}
+                          style={{...btn(C.textMid,C.surface2),padding:'5px 12px'}}>Clear</button>
+                      </div>
+
+                      {/* Operations */}
+                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        {def.patches.map(p=>(
+                          <div key={p.id} className="card" style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                              <span style={{fontSize:'12px',fontWeight:700,color:C.text}}>{p.name}</span>
+                              <span style={{fontSize:'8px',fontWeight:700,color:C.textMid,background:C.surface2,border:`1px solid ${C.border}`,borderRadius:'3px',padding:'1px 5px',textTransform:'uppercase',letterSpacing:'.04em'}}>{p.op}</span>
+                              {p.pending&&<span style={{fontSize:'8px',fontWeight:700,color:C.amber,background:C.amber+'22',border:`1px solid ${C.amber}44`,borderRadius:'3px',padding:'1px 5px'}}>PENDING</span>}
+                            </div>
+                            <div style={{fontSize:'10px',color:C.textMid,lineHeight:1.6}}>{p.note}</div>
+                            {p.op==='write'&&(
+                              <input className="input-sm" placeholder="Donor ISN — 16 bytes hex e.g. 1A 2B 3C…"
+                                value={immoDonorIsn} onChange={e=>setImmoDonorIsn(e.target.value)}/>
+                            )}
+                            <div>
+                              <button onClick={()=>applyImmo(p)}
+                                style={{...btn(p.op==='read'?C.blue:p.op==='virginise'?C.purple:C.green),padding:'6px 14px',opacity:p.pending?0.7:1}}>
+                                {p.op==='read'?'Read ISN':p.op==='write'?'Write Donor ISN':'Virginise'}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Log */}
+                      {immoLog.length>0&&(
+                        <div style={{background:'#070A0E',border:`1px solid ${C.border}`,borderRadius:'8px',padding:'12px 14px',fontFamily:"'Courier New',monospace",fontSize:'11px',lineHeight:1.8}}>
+                          {immoLog.map((e,i)=>e.type==='divider'
+                            ? <div key={i} style={{borderTop:`1px solid ${C.border}`,margin:'6px 0'}}/>
+                            : <div key={i} style={{color:e.col||C.textMid,whiteSpace:'pre-wrap'}}>{e.text}</div>)}
+                        </div>
+                      )}
+
+                      {/* Export patched EEPROM */}
+                      {eePatched&&eeDownloadUrl&&(
+                        <a href={eeDownloadUrl}
+                          download={(eeFile?.name||'eeprom').replace(/\.(bin|eep)$/i,'')+'_immo_modified.bin'}
+                          style={{padding:'10px',fontSize:'12px',fontWeight:700,textAlign:'center',
+                            background:'#166534',border:'1px solid #22C55E',borderRadius:'6px',color:'#22C55E',
+                            textDecoration:'none'}}>
+                          ↓ Download Modified EEPROM
+                        </a>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             );
